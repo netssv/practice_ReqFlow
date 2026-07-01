@@ -15,17 +15,34 @@ class AIProxyClient:
         proxy_api_key: str | None = None,
         timeout: float = 30.0,
     ) -> None:
-        self.proxy_url = proxy_url or os.getenv("AI_PROXY_URL", "")
-        self.proxy_api_key = proxy_api_key or os.getenv("AI_PROXY_API_KEY", "")
-        self.model = os.getenv("AI_PROXY_MODEL", "gpt-4o-mini")
         self.timeout = timeout
+        
+        # Detectar el proveedor
+        self.provider = os.getenv("AI_PROVIDER", "proxy").lower()
+        gemini_api_key = os.getenv("GEMINI_API_KEY", "")
+
+        # Si hay GEMINI_API_KEY y no se configuró proxy_api_key/AI_PROXY_API_KEY, auto-configurar gemini
+        default_proxy_key = os.getenv("AI_PROXY_API_KEY", "")
+        if gemini_api_key and not (proxy_api_key or default_proxy_key):
+            self.provider = "gemini"
+
+        if self.provider == "gemini":
+            self.proxy_api_key = proxy_api_key or gemini_api_key
+            # Endpoint OpenAI-compatible oficial para Gemini 
+            self.proxy_url = proxy_url or "https://generativelanguage.googleapis.com/v1beta/openai"
+            self.model = os.getenv("GEMINI_MODEL", "gemini-1.5-flash")
+        else:
+            self.proxy_url = proxy_url or os.getenv("AI_PROXY_URL", "")
+            self.proxy_api_key = proxy_api_key or default_proxy_key
+            self.model = os.getenv("AI_PROXY_MODEL", "gpt-4o-mini")
+
         self.is_available = bool(self.proxy_url and self.proxy_api_key)
 
     def complete(
         self, system_prompt: str, user_message: str, max_tokens: int = 1000
     ) -> str:
         if not self.is_available:
-            raise AIProxyError("AI proxy is not configured.")
+            raise AIProxyError("AI proxy or Gemini API is not configured.")
 
         url = f"{self.proxy_url.rstrip('/')}/chat/completions"
         headers = {"Authorization": f"Bearer {self.proxy_api_key}"}
@@ -74,3 +91,4 @@ class AIProxyClient:
             pass
 
         raise AIProxyError("AI proxy response does not include textual content.")
+
